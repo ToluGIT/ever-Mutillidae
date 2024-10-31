@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ldap_admin-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ldap_admin
+  template:
+    metadata:
+      labels:
+        app: ldap_admin
+    spec:
+      containers:
+      - name: ldap_admin
+        image: {{IMAGE_NAME}}
+        ports:
+        - containerPort: 80  # The web service runs on port 80 inside the container
+

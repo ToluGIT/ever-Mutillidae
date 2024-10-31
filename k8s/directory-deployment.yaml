@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: directory-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: directory
+  template:
+    metadata:
+      labels:
+        app: directory
+    spec:
+      containers:
+      - name: directory
+        image: {{IMAGE_NAME}}
+        ports:
+                - containerPort: 389  # The LDAP service runs on port 389 inside the container
+
