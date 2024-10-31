@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: database_admin-deployment
+  name: database-admin-deployment
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: database_admin
+      app: database-admin
   template:
     metadata:
       labels:
-        app: database_admin
+        app: database-admin
     spec:
       containers:
-      - name: database_admin
+      - name: database-admin
         image: {{IMAGE_NAME}}
         ports:
         - containerPort: 80  # The Database admin service runs on port 80 inside the container
