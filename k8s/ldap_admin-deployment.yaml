@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: directory_admin-deployment
+  name: directory-admin-deployment
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: directory_admin
+      app: directory-admin
   template:
     metadata:
       labels:
-        app: directory_admin
+        app: directory-admin
     spec:
       containers:
-      - name: directory_admin
+      - name: directory-admin
         image: {{IMAGE_NAME}}
         ports:
         - containerPort: 80  # The web service runs on port 80 inside the container

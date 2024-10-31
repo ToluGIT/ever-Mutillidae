@@ -7,16 +7,12 @@ spec:
   selector:
     app: www
   ports:
-    - protocol: TCP
-      port: 80              # Internal service port (HTTP)
-      targetPort: 80         # Container's HTTP port
-      nodePort: 30080        # Exposed on the node for external access
-    - protocol: TCP
-      port: 443             # Internal service port (HTTPS)
-      targetPort: 443        # Container's HTTPS port
-      nodePort: 30443        # Exposed on the node for external HTTPS access
-    - protocol: TCP
-      port: 8888            # Internal port for StackHawk scans
-      targetPort: 80         # Container's HTTP port for scanning
-      nodePort: 30888        # Exposed on the node for StackHawk scanning
-
+    - port: 80
+      targetPort: 80
+      name: http
+    - port: 8888
+      targetPort: 80
+      name: stackhawk-scan
+    - port: 443
+      targetPort: 443
+      name: https

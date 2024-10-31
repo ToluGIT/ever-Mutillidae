@@ -27,8 +27,8 @@ services:
       - datanet  # Connects the container to the 'datanet' network
 
   # Service 2: Database Admin Interface (e.g., phpMyAdmin)
-  database_admin:
-    container_name: database_admin  # Sets the container name as 'database_admin'
+  database-admin:
+    container_name: database-admin  # Sets the container name as 'database_admin'
     depends_on:
       - database  # Ensures that the 'database' service is up before starting this container
     image: webpwnized/mutillidae:database_admin  # Pulls a prebuilt image for database admin
@@ -75,8 +75,8 @@ services:
       - ldapnet  # Connects to the 'ldapnet' network for LDAP communication
 
   # Service 5: LDAP Admin Interface (e.g., phpLDAPadmin)
-  directory_admin:
-    container_name: directory_admin  # Container name for LDAP admin
+  directory-admin:
+    container_name: directory-admin  # Container name for LDAP admin
     depends_on:
       - directory  # Ensures the 'directory' service is up before starting this service
     image: webpwnized/mutillidae:ldap_admin  # Prebuilt image for LDAP admin

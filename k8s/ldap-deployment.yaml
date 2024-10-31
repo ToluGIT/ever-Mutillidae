@@ -14,7 +14,19 @@ spec:
     spec:
       containers:
       - name: directory
-        image: {{IMAGE_NAME}}
+        image: "{{IMAGE_NAME}}" # Placeholder to be replaced with actual image name
         ports:
-                - containerPort: 389  # The LDAP service runs on port 389 inside the container
+        - containerPort: 389
+        volumeMounts:
+        - mountPath: /var/lib/ldap
+          name: ldap-data
+        - mountPath: /etc/ldap/slapd.d
+          name: ldap-config
+      volumes:
+      - name: ldap-data
+        persistentVolumeClaim:
+          claimName: ldap-data-pvc
+      - name: ldap-config
+        persistentVolumeClaim:
+          claimName: ldap-config-pvc
 
