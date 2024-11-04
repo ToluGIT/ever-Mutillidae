@@ -1,0 +1,184 @@
+pipeline {
+    agent any
+
+    environment {
+        REPO_URL = 'https://github.com/ToluGIT/ever.git'
+        BRANCH = 'main'
+        IMAGE_PREFIX = 'webpwnized/mutillidae'
+        AWS_REGION = 'us-east-1' // Update to your AWS region
+    }
+
+    stages {
+        stage('Retrieve Secrets from AWS Secrets Manager') {
+            steps {
+                script {
+                    // Retrieve DockerHub credentials
+                    def dockerHubCreds = sh(script: "aws secretsmanager get-secret-value --secret-id DockerHubCredentials --region ${AWS_REGION} --query 'SecretString' --output text", returnStdout: true)
+                    def dockerHubSecret = readJSON(text: dockerHubCreds)
+                    env.DOCKER_USR = dockerHubSecret.username
+                    env.DOCKER_PWD = dockerHubSecret.password
+
+                    // Retrieve EC2 credentials
+                    def ec2Creds = sh(script: "aws secretsmanager get-secret-value --secret-id EC2InstanceCredentials --region ${AWS_REGION} --query 'SecretString' --output text", returnStdout: true)
+                    def ec2Secret = readJSON(text: ec2Creds)
+                    env.EC2_USER = ec2Secret.username
+                    env.EC2_PASS = ec2Secret.password
+
+                    // Retrieve SonarCloud credentials
+                    def sonarCreds = sh(script: "aws secretsmanager get-secret-value --secret-id SonarCloudCredentials --region ${AWS_REGION} --query 'SecretString' --output text", returnStdout: true)
+                    def sonarSecret = readJSON(text: sonarCreds)
+                    env.SONAR_TOKEN = sonarSecret.token
+                    env.SONAR_PROJECT_KEY = sonarSecret.project_key
+                    env.SONAR_ORGANIZATION = sonarSecret.organization
+
+                    // Retrieve Server IP
+                    def serverIpSecret = sh(script: "aws secretsmanager get-secret-value --secret-id ServerIP --region ${AWS_REGION} --query 'SecretString' --output text", returnStdout: true)
+                    env.SERVER_IP = readJSON(text: serverIpSecret).ip_address
+                }
+            }
+        }
+
+        stage('Checkout Code') {
+            steps {
+                script {
+                    git branch: "${BRANCH}", url: "${REPO_URL}"
+                    GIT_COMMIT = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    echo "GIT_COMMIT is set to ${GIT_COMMIT}"
+                }
+            }
+        }
+
+        stage('SonarCloud SAST Analysis') {
+            steps {
+                withEnv(["PATH=/usr/local/sonar-scanner/bin:$PATH"]) {
+                    sh '''
+                    sonar-scanner \
+                      -Dsonar.organization=${SONAR_ORGANIZATION} \
+                      -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                      -Dsonar.sources=. \
+                      -Dsonar.host.url=https://sonarcloud.io \
+                      -Dsonar.login=${SONAR_TOKEN}
+                    '''
+                }
+            }
+        }
+
+        stage('Build Docker Images') {
+            steps {
+                script {
+                    sh """
+                    docker compose -f .build/docker-compose.yml build
+                    """
+                }
+            }
+        }
+
+        stage('Trivy Image Scanning') {
+            steps {
+                script {
+                    sh 'mkdir -p trivy-reports'
+                    def images = ['database', 'database_admin', 'www', 'ldap', 'ldap_admin']
+
+                    for (image in images) {
+                        def imageName = "${IMAGE_PREFIX}:${image}"
+                        def reportFile = "trivy-reports/${image}-scan.json"
+
+                        def imageExists = sh(
+                            script: "docker images -q ${imageName}",
+                            returnStatus: true
+                        ) == 0
+
+                        if (imageExists) {
+                            echo "Scanning ${imageName} with Trivy..."
+                            sh """
+                            trivy image --severity HIGH,CRITICAL --format json --output ${reportFile} ${imageName} || true
+                            """
+                        } else {
+                            echo "Image ${imageName} not found locally. Skipping Trivy scan."
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Tag and Push Docker Images to Docker Hub') {
+            steps {
+                script {
+                    def versionTag = "v${env.BUILD_NUMBER}-${GIT_COMMIT}"
+                    def services = ['database', 'database_admin', 'www', 'ldap', 'ldap_admin']
+
+                    // Log in to Docker Hub securely using environment variables without exposing password in logs
+                    sh '''
+                    echo "${DOCKER_PWD}" | docker login -u "${DOCKER_USR}" --password-stdin
+                    '''
+
+                    for (service in services) {
+                        def imageName = "${IMAGE_PREFIX}:${service}"
+                        def versionedTag = "${DOCKER_USR}/${service}:${versionTag}"
+
+                        echo "Tagging ${imageName} as ${versionedTag}..."
+
+                        def image_id = sh(
+                            script: "docker images ${imageName} --format '{{.ID}}' | head -n 1",
+                            returnStdout: true
+                        ).trim()
+
+                        if (image_id) {
+                            sh """
+                            docker tag ${image_id} ${versionedTag}
+                            docker push ${versionedTag}
+                            """
+                        } else {
+                            echo "Warning: Image ${imageName} was not built successfully and will be skipped."
+                        }
+                    }
+
+                    // Log out after pushing images
+                    sh 'docker logout'
+                }
+            }
+        }
+
+        stage('Deploy to Minikube on EC2') {
+            steps {
+                script {
+                    def imageTag = "v${env.BUILD_NUMBER}-${GIT_COMMIT}"
+
+                    // Connect to EC2 instance and execute kubectl commands for deployment and service creation
+                    sh """
+                    sshpass -p "${EC2_PASS}" ssh -o StrictHostKeyChecking=no "${EC2_USER}"@${SERVER_IP} << 'EOF'
+                    echo "Deploying to Kubernetes on Minikube with image tag: ${imageTag}"
+
+                    # Create deployments with the correct image tag
+                    kubectl create deployment database --image="docker.io/toluid/database:${imageTag}"
+                    kubectl create deployment ldap --image="docker.io/toluid/ldap:${imageTag}"
+                    kubectl create deployment www --image="docker.io/toluid/www:${imageTag}"
+                    kubectl create deployment databaseadmin --image="docker.io/toluid/database_admin:${imageTag}"
+                    kubectl create deployment ldapadmin --image="docker.io/toluid/ldap_admin:${imageTag}"
+
+                    # Expose services
+                    kubectl expose deployment database --name=database --type=ClusterIP --protocol=TCP --port=3306 --target-port=3306
+                    kubectl expose deployment ldap --name=directory --type=ClusterIP --protocol=TCP --port=389 --target-port=389
+                    kubectl expose deployment www --name=www --type=NodePort --protocol=TCP --port=80 --target-port=80
+                    kubectl expose deployment databaseadmin --name=databaseadmin --type=NodePort --protocol=TCP --port=80 --target-port=80
+                    kubectl expose deployment ldapadmin --name=ldapadmin --type=NodePort --protocol=TCP --port=80 --target-port=80
+                    EOF
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Deployment completed. Check logs for details.'
+            archiveArtifacts artifacts: 'trivy-reports/*.json', allowEmptyArchive: true
+        }
+        success {
+            echo 'Pipeline executed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed. Check logs for more details.'
+        }
+    }
+}
