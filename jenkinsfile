@@ -31,11 +31,11 @@ pipeline {
                     echo "Debug: Raw SSH key from secrets (first 100 chars): ${ec2Secret.ssh_private_key.take(100)}"
                     // Write key to temp file first, then convert newlines
                     writeFile file: 'temp-key.txt', text: ec2Secret.ssh_private_key
-                    sh """
-                    # Convert literal \n to actual newlines using sed
-                    sed 's/\\n/\n/g' temp-key.txt > ec2-key.pem
+                    sh '''
+                    # Convert literal backslash-n to actual newlines
+                    sed "s/\\\\n/\n/g" temp-key.txt > ec2-key.pem
                     rm -f temp-key.txt
-                    """
+                    '''
                     sh 'chmod 600 ec2-key.pem'
                     // Debug: Check key file format
                     sh 'echo "Key file first few lines:" && head -n 3 ec2-key.pem'
