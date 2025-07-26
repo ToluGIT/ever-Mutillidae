@@ -29,8 +29,10 @@ pipeline {
                     env.EC2_USER = ec2Secret.username
                     // Store SSH key in temporary file with proper formatting
                     echo "Debug: Raw SSH key from secrets (first 100 chars): ${ec2Secret.ssh_private_key.take(100)}"
-                    def privateKey = ec2Secret.ssh_private_key.replace('\\n', '\n')
-                    writeFile file: 'ec2-key.pem', text: privateKey
+                    // Use shell to properly format the key with line breaks
+                    sh """
+                    echo '${ec2Secret.ssh_private_key}' | sed 's/\\\\n/\n/g' > ec2-key.pem
+                    """
                     sh 'chmod 600 ec2-key.pem'
                     // Debug: Check key file format
                     sh 'echo "Key file first few lines:" && head -n 3 ec2-key.pem'
