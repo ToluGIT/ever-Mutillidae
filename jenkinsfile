@@ -91,7 +91,7 @@ pipeline {
                     def images = ['database', 'database_admin', 'www', 'ldap', 'ldap_admin']
 
                     for (image in images) {
-                        def imageName = "${IMAGE_PREFIX}:${image}"
+                        def imageName = "webpwnized/mutillidae:${image}"
                         def reportFile = "trivy-reports/${image}-scan.json"
 
                         def imageExists = sh(
@@ -124,7 +124,7 @@ pipeline {
                     '''
 
                     for (service in services) {
-                        def imageName = "${IMAGE_PREFIX}:${service}"
+                        def imageName = "webpwnized/mutillidae:${service}"
                         def versionedTag = "${DOCKER_USR}/${service}:${versionTag}"
 
                         echo "Tagging ${imageName} as ${versionedTag}..."
