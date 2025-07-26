@@ -29,9 +29,13 @@ pipeline {
                     env.EC2_USER = ec2Secret.username
                     // Store SSH key in temporary file with proper formatting
                     echo "Debug: Raw SSH key from secrets (first 100 chars): ${ec2Secret.ssh_private_key.take(100)}"
-                    // Use Groovy to handle newline conversion properly
-                    def privateKey = ec2Secret.ssh_private_key.replace('\\n', System.lineSeparator())
-                    writeFile file: 'ec2-key.pem', text: privateKey
+                    // Write key to temp file first, then convert newlines
+                    writeFile file: 'temp-key.txt', text: ec2Secret.ssh_private_key
+                    sh """
+                    # Convert literal \n to actual newlines using sed
+                    sed 's/\\n/\n/g' temp-key.txt > ec2-key.pem
+                    rm -f temp-key.txt
+                    """
                     sh 'chmod 600 ec2-key.pem'
                     // Debug: Check key file format
                     sh 'echo "Key file first few lines:" && head -n 3 ec2-key.pem'
