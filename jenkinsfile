@@ -18,6 +18,11 @@ pipeline {
                     env.DOCKER_USR = dockerHubSecret.username
                     env.DOCKER_PWD = dockerHubSecret.password
 
+
+                    // Retrieve Server IP
+                    def serverIpSecret = sh(script: "aws secretsmanager get-secret-value --secret-id ServerIP --region ${AWS_REGION} --query 'SecretString' --output text", returnStdout: true)
+                    env.SERVER_IP = readJSON(text: serverIpSecret).ip_address
+                    
                     // Retrieve EC2 SSH Key from Secrets Manager (recommended over password)
                     def ec2Creds = sh(script: "aws secretsmanager get-secret-value --secret-id EC2InstanceCredentials --region ${AWS_REGION} --query 'SecretString' --output text", returnStdout: true)
                     def ec2Secret = readJSON(text: ec2Creds)
@@ -43,9 +48,6 @@ EOL
                     env.SONAR_PROJECT_KEY = sonarSecret.project_key
                     env.SONAR_ORGANIZATION = sonarSecret.organization
 
-                    // Retrieve Server IP
-                    def serverIpSecret = sh(script: "aws secretsmanager get-secret-value --secret-id ServerIP --region ${AWS_REGION} --query 'SecretString' --output text", returnStdout: true)
-                    env.SERVER_IP = readJSON(text: serverIpSecret).ip_address
                 }
             }
         }
