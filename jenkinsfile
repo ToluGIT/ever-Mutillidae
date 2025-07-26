@@ -22,9 +22,19 @@ pipeline {
                     def ec2Creds = sh(script: "aws secretsmanager get-secret-value --secret-id EC2InstanceCredentials --region ${AWS_REGION} --query 'SecretString' --output text", returnStdout: true)
                     def ec2Secret = readJSON(text: ec2Creds)
                     env.EC2_USER = ec2Secret.username
-                    // Store SSH key in temporary file for secure authentication
-                    writeFile file: 'ec2-key.pem', text: ec2Secret.ssh_private_key
-                    sh 'chmod 600 ec2-key.pem'
+                    // Store SSH key in temporary file with proper formatting
+                    sh """
+                    cat > ec2-key.pem << 'EOL'
+${ec2Secret.ssh_private_key.replace('\\n', '\n')}
+EOL
+                    chmod 600 ec2-key.pem
+                    """
+                    // Debug: Check key file format
+                    sh 'echo "Key file first few lines:" && head -n 3 ec2-key.pem'
+                    sh 'echo "Key file last few lines:" && tail -n 3 ec2-key.pem'
+                    sh 'echo "Key file line count:" && wc -l ec2-key.pem'
+                    // Test SSH connection
+                    sh 'ssh -i ec2-key.pem -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@${SERVER_IP} "echo SSH connection successful"'
 
                     // Retrieve SonarCloud credentials
                     def sonarCreds = sh(script: "aws secretsmanager get-secret-value --secret-id SonarCloudCredentials --region ${AWS_REGION} --query 'SecretString' --output text", returnStdout: true)
