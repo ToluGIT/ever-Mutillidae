@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        REPO_URL = 'https://github.com/ToluGIT/ever.git'
+        REPO_URL = 'https://github.com/ToluGIT/ever-Mutillidae.git'
         BRANCH = 'main'
         IMAGE_PREFIX = 'toluid'
         AWS_REGION = 'us-east-1' // Update to your AWS region
