@@ -231,15 +231,21 @@ pipeline {
         }
         failure {
             echo 'Pipeline failed. Check logs for more details.'
-            // Get deployment status for troubleshooting
-            sh """
-            ssh -i ec2-key.pem -o StrictHostKeyChecking=no "${EC2_USER}"@${SERVER_IP} << 'EOF' || true
-            echo "Deployment troubleshooting info:"
-            kubectl get pods --all-namespaces
-            kubectl describe pods -l app in (www,database,directory)
-            kubectl logs -l app=www --tail=50
-            EOF
-            """ 
+            script {
+                // Only run troubleshooting if variables are available
+                if (env.EC2_USER && env.SERVER_IP) {
+                    sh """
+                    ssh -i ec2-key.pem -o StrictHostKeyChecking=no "${EC2_USER}"@${SERVER_IP} << 'EOF' || true
+                    echo "Deployment troubleshooting info:"
+                    kubectl get pods --all-namespaces
+                    kubectl describe pods -l "app in (www,database,directory)"
+                    kubectl logs -l app=www --tail=50
+                    EOF
+                    """
+                } else {
+                    echo 'Skipping remote troubleshooting - credentials not available'
+                }
+            }
         }
     }
 }
