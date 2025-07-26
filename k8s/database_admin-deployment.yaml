@@ -14,7 +14,27 @@ spec:
     spec:
       containers:
       - name: database-admin
-        image: {{IMAGE_NAME}}
+        image: IMAGE_PLACEHOLDER
         ports:
         - containerPort: 80  # The Database admin service runs on port 80 inside the container
+        env:
+        - name: PMA_HOST
+          value: "database-service"
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mutillidae-secrets
+              key: mysql-root-password
+        - name: PMA_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mutillidae-secrets
+              key: mysql-root-password
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
 

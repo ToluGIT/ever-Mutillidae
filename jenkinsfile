@@ -4,7 +4,7 @@ pipeline {
     environment {
         REPO_URL = 'https://github.com/ToluGIT/ever.git'
         BRANCH = 'main'
-        IMAGE_PREFIX = 'webpwnized/mutillidae'
+        IMAGE_PREFIX = 'toluid'
         AWS_REGION = 'us-east-1' // Update to your AWS region
     }
 
@@ -18,11 +18,13 @@ pipeline {
                     env.DOCKER_USR = dockerHubSecret.username
                     env.DOCKER_PWD = dockerHubSecret.password
 
-                    // Retrieve EC2 credentials
+                    // Retrieve EC2 SSH Key from Secrets Manager (recommended over password)
                     def ec2Creds = sh(script: "aws secretsmanager get-secret-value --secret-id EC2InstanceCredentials --region ${AWS_REGION} --query 'SecretString' --output text", returnStdout: true)
                     def ec2Secret = readJSON(text: ec2Creds)
                     env.EC2_USER = ec2Secret.username
-                    env.EC2_PASS = ec2Secret.password
+                    // Store SSH key in temporary file for secure authentication
+                    writeFile file: 'ec2-key.pem', text: ec2Secret.ssh_private_key
+                    sh 'chmod 600 ec2-key.pem'
 
                     // Retrieve SonarCloud credentials
                     def sonarCreds = sh(script: "aws secretsmanager get-secret-value --secret-id SonarCloudCredentials --region ${AWS_REGION} --query 'SecretString' --output text", returnStdout: true)
@@ -66,8 +68,11 @@ pipeline {
         stage('Build Docker Images') {
             steps {
                 script {
+                    // Build images - www container needs DATABASE_PASSWORD as build arg
                     sh """
-                    docker compose -f .build/docker-compose.yml build
+                    # Build images with required build arguments
+                    docker compose -f .build/docker-compose.yml build \
+                      --build-arg DATABASE_PASSWORD=mutillidae
                     """
                 }
             }
@@ -144,24 +149,66 @@ pipeline {
                 script {
                     def imageTag = "v${env.BUILD_NUMBER}-${GIT_COMMIT}"
 
-                    // Connect to EC2 instance and execute kubectl commands for deployment and service creation
+                    // Create deployment files with image tags and deploy
                     sh """
-                    sshpass -p "${EC2_PASS}" ssh -o StrictHostKeyChecking=no "${EC2_USER}"@${SERVER_IP} << 'EOF'
+                    # Copy k8s files to workspace and update image placeholders
+                    cp -r k8s/ k8s-deploy/
+                    
+                    # Update image placeholders with actual image tags
+                    sed -i 's|IMAGE_PLACEHOLDER|docker.io/toluid/database:${imageTag}|g' k8s-deploy/database-deployment.yaml
+                    sed -i 's|IMAGE_PLACEHOLDER|docker.io/toluid/www:${imageTag}|g' k8s-deploy/www-deployment.yaml
+                    sed -i 's|IMAGE_PLACEHOLDER|docker.io/toluid/ldap:${imageTag}|g' k8s-deploy/ldap-deployment.yaml
+                    sed -i 's|IMAGE_PLACEHOLDER|docker.io/toluid/ldap_admin:${imageTag}|g' k8s-deploy/ldap_admin-deployment.yaml
+                    sed -i 's|IMAGE_PLACEHOLDER|docker.io/toluid/database_admin:${imageTag}|g' k8s-deploy/database_admin-deployment.yaml
+                    """
+
+                    // Copy files to EC2 and deploy using declarative approach
+                    sh """
+                    # Copy k8s files to remote server using SSH key
+                    scp -i ec2-key.pem -o StrictHostKeyChecking=no -r k8s-deploy/ "${EC2_USER}"@${SERVER_IP}:/tmp/
+                    
+                    # Deploy using kubectl apply with SSH key
+                    ssh -i ec2-key.pem -o StrictHostKeyChecking=no "${EC2_USER}"@${SERVER_IP} << 'EOF'
                     echo "Deploying to Kubernetes on Minikube with image tag: ${imageTag}"
+                    
+                    # Apply secrets and configmaps first
+                    kubectl apply -f /tmp/k8s-deploy/secrets.yaml
+                    
+                    # Apply deployments and services
+                    kubectl apply -f /tmp/k8s-deploy/
+                    
+                    # Clean up
+                    rm -rf /tmp/k8s-deploy/
+                    EOF
+                    """
+                }
+            }
+        }
 
-                    # Create deployments with the correct image tag
-                    kubectl create deployment database --image="docker.io/toluid/database:${imageTag}"
-                    kubectl create deployment ldap --image="docker.io/toluid/ldap:${imageTag}"
-                    kubectl create deployment www --image="docker.io/toluid/www:${imageTag}"
-                    kubectl create deployment databaseadmin --image="docker.io/toluid/database_admin:${imageTag}"
-                    kubectl create deployment ldapadmin --image="docker.io/toluid/ldap_admin:${imageTag}"
-
-                    # Expose services
-                    kubectl expose deployment database --name=database --type=ClusterIP --protocol=TCP --port=3306 --target-port=3306
-                    kubectl expose deployment ldap --name=directory --type=ClusterIP --protocol=TCP --port=389 --target-port=389
-                    kubectl expose deployment www --name=www --type=NodePort --protocol=TCP --port=80 --target-port=80
-                    kubectl expose deployment databaseadmin --name=databaseadmin --type=NodePort --protocol=TCP --port=80 --target-port=80
-                    kubectl expose deployment ldapadmin --name=ldapadmin --type=NodePort --protocol=TCP --port=80 --target-port=80
+        stage('Health Check and Validation') {
+            steps {
+                script {
+                    // Wait for deployments to be ready and validate
+                    sh """
+                    ssh -i ec2-key.pem -o StrictHostKeyChecking=no "${EC2_USER}"@${SERVER_IP} << 'EOF'
+                    echo "Waiting for deployments to be ready..."
+                    
+                    # Wait for all deployments to be ready (timeout 5 minutes)
+                    kubectl wait --for=condition=available --timeout=300s deployment/database-deployment
+                    kubectl wait --for=condition=available --timeout=300s deployment/www-deployment
+                    kubectl wait --for=condition=available --timeout=300s deployment/directory-deployment
+                    kubectl wait --for=condition=available --timeout=300s deployment/database-admin-deployment
+                    kubectl wait --for=condition=available --timeout=300s deployment/directory-admin-deployment
+                    
+                    # Show deployment status
+                    echo "Deployment Status:"
+                    kubectl get deployments -o wide
+                    kubectl get pods -o wide
+                    kubectl get services
+                    
+                    # Basic connectivity test
+                    echo "Testing internal connectivity..."
+                    kubectl run test-pod --image=busybox --rm -it --restart=Never -- nslookup database-service
                     EOF
                     """
                 }
@@ -173,12 +220,26 @@ pipeline {
         always {
             echo 'Deployment completed. Check logs for details.'
             archiveArtifacts artifacts: 'trivy-reports/*.json', allowEmptyArchive: true
+            // Clean up SSH key
+            sh 'rm -f ec2-key.pem || true'
+            // Clean up k8s-deploy directory
+            sh 'rm -rf k8s-deploy/ || true'
         }
         success {
             echo 'Pipeline executed successfully!'
+            echo 'All deployments are healthy and ready.'
         }
         failure {
             echo 'Pipeline failed. Check logs for more details.'
+            // Get deployment status for troubleshooting
+            sh """
+            ssh -i ec2-key.pem -o StrictHostKeyChecking=no "${EC2_USER}"@${SERVER_IP} << 'EOF' || true
+            echo "Deployment troubleshooting info:"
+            kubectl get pods --all-namespaces
+            kubectl describe pods -l app in (www,database,directory)
+            kubectl logs -l app=www --tail=50
+            EOF
+            """ 
         }
     }
 }

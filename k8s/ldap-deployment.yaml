@@ -14,9 +14,42 @@ spec:
     spec:
       containers:
       - name: directory
-        image: "{{IMAGE_NAME}}" # Placeholder to be replaced with actual image name
+        image: IMAGE_PLACEHOLDER # Placeholder to be replaced with actual image name
         ports:
         - containerPort: 389
+        env:
+        - name: LDAP_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mutillidae-secrets
+              key: ldap-admin-password
+        - name: LDAP_CONFIG_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mutillidae-secrets
+              key: ldap-admin-password
+        - name: LDAP_ORGANISATION
+          valueFrom:
+            configMapKeyRef:
+              name: mutillidae-config
+              key: LDAP_ORGANISATION
+        - name: LDAP_DOMAIN
+          valueFrom:
+            configMapKeyRef:
+              name: mutillidae-config
+              key: LDAP_DOMAIN
+        - name: LDAP_BASE_DN
+          valueFrom:
+            configMapKeyRef:
+              name: mutillidae-config
+              key: LDAP_BASE_DN
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
         volumeMounts:
         - mountPath: /var/lib/ldap
           name: ldap-data

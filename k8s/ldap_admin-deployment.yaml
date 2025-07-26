@@ -14,7 +14,17 @@ spec:
     spec:
       containers:
       - name: directory-admin
-        image: {{IMAGE_NAME}}
+        image: IMAGE_PLACEHOLDER
         ports:
         - containerPort: 80  # The web service runs on port 80 inside the container
+        env:
+        - name: PHPLDAPADMIN_LDAP_HOSTS
+          value: "directory-service"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
 

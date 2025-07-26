@@ -3,12 +3,12 @@ kind: Service
 metadata:
   name: database-service
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: database
   ports:
     - protocol: TCP
-      port: 5432             # Internal PostgreSQL port
-      targetPort: 5432        # Container's PostgreSQL port
-      nodePort: 30081         # Exposed on the node for database access
+      port: 3306             # Internal MySQL port
+      targetPort: 3306        # Container's MySQL port
+      nodePort: 30306         # Exposed on the node for database access
 

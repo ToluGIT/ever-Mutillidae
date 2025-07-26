@@ -51,6 +51,8 @@ services:
     build:
       context: ./www  # Directory context for building the web service
       dockerfile: Dockerfile  # Dockerfile used to build the web service image
+      args:
+        DATABASE_PASSWORD: ${DATABASE_PASSWORD:-mutillidae}  # Pass as build argument
     ports:
       - 127.0.0.1:80:80  # Maps port 80 on localhost to port 80 inside the container (for HTTP)
       - 127.0.0.1:8888:80  # Maps port 8888 on localhost to port 80 for StackHawk scanning

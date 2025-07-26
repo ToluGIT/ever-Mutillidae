@@ -16,8 +16,8 @@
 # Start with latest version of MariaDB official image
 FROM mariadb:latest
 
-# Set environment variable for MySQL root password
-ENV MYSQL_ROOT_PASSWORD="mutillidae"
+# MySQL root password will be set via environment variable at runtime
+# This allows secure password injection from K8s secrets
 
 # Combine apt-get commands and handle failures gracefully
 RUN apt-get update && \

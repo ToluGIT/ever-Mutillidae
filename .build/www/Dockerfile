@@ -26,9 +26,10 @@ FROM php:apache
 # Arguments with default values, but can be overidden
 ARG DATABASE_HOST="database"
 ARG DATABASE_USERNAME="root"
-ARG DATABASE_PASSWORD="mutillidae"
+ARG DATABASE_PASSWORD
 ARG DATABASE_NAME="mutillidae"
 ARG DATABASE_PORT="3306"
+# Note: DATABASE_PASSWORD should be passed as build argument for security
 ARG ENABLE_ERROR_REPORTING=true	# The value can be true or false. The default is true.
 
 # ######################### #

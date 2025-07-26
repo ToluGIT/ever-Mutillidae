@@ -14,7 +14,25 @@ spec:
     spec:
       containers:
       - name: database
-        image: {{IMAGE_NAME}}
+        image: IMAGE_PLACEHOLDER
         ports:
-        - containerPort: 5432  # The PostgresSQL service runs on port 80 inside the container
+        - containerPort: 3306  # The MySQL/MariaDB service runs on port 3306 inside the container
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mutillidae-secrets
+              key: mysql-root-password
+        - name: MYSQL_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: mutillidae-config
+              key: MYSQL_DATABASE
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
 

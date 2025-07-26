@@ -25,8 +25,8 @@ FROM osixia/openldap:latest
 ENV LDAP_ORGANISATION="Mutillidae Inc"
 ENV LDAP_DOMAIN="mutillidae.localhost"
 ENV LDAP_BASE_DN="dc=mutillidae,dc=localhost"
-ENV LDAP_ADMIN_PASSWORD="mutillidae"
-ENV LDAP_CONFIG_PASSWORD="mutillidae"
+# LDAP passwords will be set via environment variables at runtime
+# This allows secure password injection from K8s secrets
 ENV LDAP_TLS="false"
 
 # Commented out because patching caused issues

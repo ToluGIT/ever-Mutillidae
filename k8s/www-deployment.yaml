@@ -14,8 +14,18 @@ spec:
     spec:
       containers:
       - name: www
-        image: {{IMAGE_NAME}}
+        image: IMAGE_PLACEHOLDER
         ports:
         - containerPort: 80  # The web service runs on port 80 inside the container
         - containerPort: 443  # The web service runs on port 443 inside the container
+        env:
+        - name: DB_HOST
+          value: "database-service"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
 

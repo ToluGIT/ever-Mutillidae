@@ -20,10 +20,9 @@ FROM phpmyadmin:latest
 # The name of the database container
 ENV PMA_HOST="database"
 
-# Create credentials
-ENV MYSQL_ROOT_PASSWORD="mutillidae"
+# Database credentials will be set via environment variables at runtime
+# This allows secure password injection from K8s secrets
 ENV PMA_USER="root"
-ENV PMA_PASSWORD="mutillidae"
 
 # Try to patch the container but do not fail if patching fails
 # Remove the apt-get lists after installation
