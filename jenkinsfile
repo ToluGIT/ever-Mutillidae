@@ -28,16 +28,16 @@ pipeline {
                     def ec2Secret = readJSON(text: ec2Creds)
                     env.EC2_USER = ec2Secret.username
                     // Store SSH key in temporary file with proper formatting
-                    sh """
-                    cat > ec2-key.pem << 'EOL'
-${ec2Secret.ssh_private_key.replace('\\n', '\n')}
-EOL
-                    chmod 600 ec2-key.pem
-                    """
+                    echo "Debug: Raw SSH key from secrets (first 100 chars): ${ec2Secret.ssh_private_key.take(100)}"
+                    def privateKey = ec2Secret.ssh_private_key.replace('\\n', '\n')
+                    writeFile file: 'ec2-key.pem', text: privateKey
+                    sh 'chmod 600 ec2-key.pem'
                     // Debug: Check key file format
                     sh 'echo "Key file first few lines:" && head -n 3 ec2-key.pem'
                     sh 'echo "Key file last few lines:" && tail -n 3 ec2-key.pem'
                     sh 'echo "Key file line count:" && wc -l ec2-key.pem'
+                    // Validate key format
+                    sh 'ssh-keygen -l -f ec2-key.pem || echo "Key format validation failed"'
                     // Test SSH connection
                     sh 'ssh -i ec2-key.pem -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@${SERVER_IP} "echo SSH connection successful"'
 
