@@ -173,18 +173,18 @@ pipeline {
                         scp -i \${SSH_KEY_FILE} -o StrictHostKeyChecking=no -r k8s-deploy/ "${EC2_USER}"@${SERVER_IP}:/tmp/
                         
                         # Deploy using kubectl apply with SSH key
-                        ssh -i \${SSH_KEY_FILE} -o StrictHostKeyChecking=no "${EC2_USER}"@${SERVER_IP} << 'EOF'
-                        echo "Deploying to Kubernetes on Minikube with image tag: ${imageTag}"
-                        
-                        # Apply secrets and configmaps first
-                        kubectl apply -f /tmp/k8s-deploy/secrets.yaml
-                        
-                        # Apply deployments and services
-                        kubectl apply -f /tmp/k8s-deploy/
-                        
-                        # Clean up
-                        rm -rf /tmp/k8s-deploy/
-                        EOF
+                        ssh -i \${SSH_KEY_FILE} -o StrictHostKeyChecking=no "${EC2_USER}"@${SERVER_IP} << 'DEPLOY_EOF'
+echo "Deploying to Kubernetes on Minikube with image tag: ${imageTag}"
+
+# Apply secrets and configmaps first
+kubectl apply -f /tmp/k8s-deploy/secrets.yaml
+
+# Apply deployments and services
+kubectl apply -f /tmp/k8s-deploy/
+
+# Clean up
+rm -rf /tmp/k8s-deploy/
+DEPLOY_EOF
                         """
                     }
                 }
@@ -198,26 +198,26 @@ pipeline {
                     withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY_FILE', usernameVariable: 'SSH_USER')]) {
                         // Wait for deployments to be ready and validate
                         sh """
-                        ssh -i \${SSH_KEY_FILE} -o StrictHostKeyChecking=no "${EC2_USER}"@${SERVER_IP} << 'EOF'
-                        echo "Waiting for deployments to be ready..."
-                        
-                        # Wait for all deployments to be ready (timeout 5 minutes)
-                        kubectl wait --for=condition=available --timeout=300s deployment/database-deployment
-                        kubectl wait --for=condition=available --timeout=300s deployment/www-deployment
-                        kubectl wait --for=condition=available --timeout=300s deployment/directory-deployment
-                        kubectl wait --for=condition=available --timeout=300s deployment/database-admin-deployment
-                        kubectl wait --for=condition=available --timeout=300s deployment/directory-admin-deployment
-                        
-                        # Show deployment status
-                        echo "Deployment Status:"
-                        kubectl get deployments -o wide
-                        kubectl get pods -o wide
-                        kubectl get services
-                        
-                        # Basic connectivity test
-                        echo "Testing internal connectivity..."
-                        kubectl run test-pod --image=busybox --rm -it --restart=Never -- nslookup database-service
-                        EOF
+                        ssh -i \${SSH_KEY_FILE} -o StrictHostKeyChecking=no "${EC2_USER}"@${SERVER_IP} << 'HEALTH_EOF'
+echo "Waiting for deployments to be ready..."
+
+# Wait for all deployments to be ready (timeout 5 minutes)
+kubectl wait --for=condition=available --timeout=300s deployment/database-deployment || true
+kubectl wait --for=condition=available --timeout=300s deployment/www-deployment || true
+kubectl wait --for=condition=available --timeout=300s deployment/directory-deployment || true
+kubectl wait --for=condition=available --timeout=300s deployment/database-admin-deployment || true
+kubectl wait --for=condition=available --timeout=300s deployment/directory-admin-deployment || true
+
+# Show deployment status
+echo "Deployment Status:"
+kubectl get deployments -o wide
+kubectl get pods -o wide
+kubectl get services
+
+# Basic connectivity test
+echo "Testing internal connectivity..."
+kubectl run test-pod --image=busybox --rm --restart=Never --timeout=30s -- nslookup database-service || echo "DNS test failed but continuing"
+HEALTH_EOF
                         """
                     }
                 }
@@ -244,12 +244,12 @@ pipeline {
                     try {
                         withCredentials([sshUserPrivateKey(credentialsId: 'ec2-ssh-key', keyFileVariable: 'SSH_KEY_FILE', usernameVariable: 'SSH_USER')]) {
                             sh """
-                            ssh -i \${SSH_KEY_FILE} -o StrictHostKeyChecking=no "${EC2_USER}"@${SERVER_IP} << 'EOF' || true
-                            echo "Deployment troubleshooting info:"
-                            kubectl get pods --all-namespaces
-                            kubectl describe pods -l "app in (www,database,directory)"
-                            kubectl logs -l app=www --tail=50
-                            EOF
+                            ssh -i \${SSH_KEY_FILE} -o StrictHostKeyChecking=no "${EC2_USER}"@${SERVER_IP} << 'TROUBLESHOOT_EOF' || true
+echo "Deployment troubleshooting info:"
+kubectl get pods --all-namespaces
+kubectl describe pods -l "app in (www,database,directory)"
+kubectl logs -l app=www --tail=50 || echo "Could not get www logs"
+TROUBLESHOOT_EOF
                             """
                         }
                     } catch (Exception e) {

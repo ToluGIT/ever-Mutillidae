@@ -10,5 +10,4 @@ spec:
     - protocol: TCP
       port: 3306             # Internal MySQL port
       targetPort: 3306        # Container's MySQL port
-      nodePort: 30306         # Exposed on the node for database access
 

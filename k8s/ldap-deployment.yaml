@@ -57,9 +57,7 @@ spec:
           name: ldap-config
       volumes:
       - name: ldap-data
-        persistentVolumeClaim:
-          claimName: ldap-data-pvc
+        emptyDir: {}
       - name: ldap-config
-        persistentVolumeClaim:
-          claimName: ldap-config-pvc
+        emptyDir: {}
 
