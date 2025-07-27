@@ -27,15 +27,14 @@ pipeline {
                     def ec2Creds = sh(script: "aws secretsmanager get-secret-value --secret-id EC2InstanceCredentials --region ${AWS_REGION} --query 'SecretString' --output text", returnStdout: true)
                     def ec2Secret = readJSON(text: ec2Creds)
                     env.EC2_USER = ec2Secret.username
-                    // Store SSH key in temporary file with proper formatting
+                    // Store SSH key using base64 encoding to avoid shell escaping issues
                     echo "Debug: Raw SSH key from secrets (first 100 chars): ${ec2Secret.ssh_private_key.take(100)}"
-                    // Write key to temp file first, then convert newlines
-                    writeFile file: 'temp-key.txt', text: ec2Secret.ssh_private_key
-                    sh '''
-                    # Convert literal \n to actual newlines using awk
-                    awk '{gsub(/\\n/,"\n")}1' temp-key.txt > ec2-key.pem
-                    rm -f temp-key.txt
-                    '''
+                    
+                    // Convert key using base64 to avoid all shell escaping problems
+                    def keyWithNewlines = ec2Secret.ssh_private_key.replace('\\n', '\n')
+                    def keyBase64 = keyWithNewlines.bytes.encodeBase64().toString()
+                    
+                    sh "echo '${keyBase64}' | base64 -d > ec2-key.pem"
                     sh 'chmod 600 ec2-key.pem'
                     // Debug: Check key file format
                     sh 'echo "Key file first few lines:" && head -n 3 ec2-key.pem'
