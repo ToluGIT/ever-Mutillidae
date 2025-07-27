@@ -216,7 +216,7 @@ kubectl get services
 
 # Basic connectivity test
 echo "Testing internal connectivity..."
-kubectl run test-pod --image=busybox --rm --restart=Never --timeout=30s -- nslookup database-service || echo "DNS test failed but continuing"
+kubectl run test-pod --image=busybox --rm --restart=Never --timeout=30s -- nslookup database || echo "DNS test failed but continuing"
 HEALTH_EOF
                         """
                     }
