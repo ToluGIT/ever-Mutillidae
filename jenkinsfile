@@ -53,10 +53,7 @@ pipeline {
 
         stage('SonarCloud SAST Analysis') {
             steps {
-                echo 'Skipping SonarCloud - Java version compatibility issue'
-                echo 'SonarCloud requires Java 17, but Jenkins agent has Java 11'
-                // Uncomment below when Java 17 is available
-                /*
+
                 withEnv(["PATH=/usr/local/sonar-scanner/bin:$PATH"]) {
                     sh '''
                     sonar-scanner \
@@ -67,7 +64,7 @@ pipeline {
                       -Dsonar.login=${SONAR_TOKEN}
                     '''
                 }
-                */
+
             }
         }
 
