@@ -3,10 +3,11 @@
 ## Prerequisites
 
 ### Required
-- Jenkins server with admin access
+- Jenkins server with admin access (with Java 17+ for SonarCloud)
 - AWS CLI installed on Jenkins agent
 - Docker installed on Jenkins agent
-- SonarCloud Scanner installed on Jenkins agent
+- SonarCloud Scanner installed on Jenkins agent (requires Java 17+)
+- Trivy scanner installed on Jenkins agent
 - EC2 instance running with Minikube installed
 - AWS account with Secrets Manager access
 
@@ -74,10 +75,11 @@ Create the following secrets in AWS Secrets Manager:
 **EC2InstanceCredentials**
 ```json
 {
-  "username": "ubuntu",
-  "ssh_private_key": "-----BEGIN RSA PRIVATE KEY-----\nYOUR_PRIVATE_KEY_CONTENT_HERE\n-----END RSA PRIVATE KEY-----"
+  "username": "ubuntu"
 }
 ```
+
+**Note**: SSH private key should be stored separately in Jenkins credentials manager as 'ec2-ssh-key' for security reasons.
 
 **DockerHubCredentials**
 ```json
@@ -110,10 +112,13 @@ Create the following secrets in AWS Secrets Manager:
 - Git plugin
 - Docker Pipeline plugin
 - Pipeline plugin
+- Pipeline Utility Steps plugin (for readJSON)
+- SSH Agent plugin (for SSH key credentials)
 
 ### 3.2 Configure Jenkins Credentials
 - Create AWS IAM role for Jenkins with Secrets Manager read permissions
 - Configure AWS credentials in Jenkins
+- Add SSH private key as Jenkins credential with ID 'ec2-ssh-key'
 - Set AWS_REGION environment variable in Jenkins (e.g., us-east-1)
 
 ### 3.3 Install Required Tools on Jenkins Agent
@@ -128,7 +133,12 @@ sudo apt update
 sudo apt install -y docker.io
 sudo usermod -aG docker jenkins
 
-# Install SonarCloud Scanner
+# Install SonarCloud Scanner (requires Java 17+)
+# First ensure Java 17 is installed
+sudo apt update
+sudo apt install -y openjdk-17-jdk
+
+# Download and install SonarCloud Scanner
 wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.8.0.2856-linux.zip
 unzip sonar-scanner-cli-4.8.0.2856-linux.zip
 sudo mv sonar-scanner-4.8.0.2856-linux /usr/local/sonar-scanner
@@ -307,8 +317,8 @@ kubectl get services
 # Get service URLs
 kubectl get services
 
-# Port forward to test locally
-kubectl port-forward svc/www-service 8080:80 &
+# Port forward to test locally (use service name 'www' after DNS fix)
+kubectl port-forward svc/www 8080:80 &
 
 # Test application (from another terminal)
 curl http://localhost:8080
@@ -320,11 +330,11 @@ curl http://localhost:8080
 ## Step 11: Initialize Database
 
 ### 11.1 Access Application
-1. Get the www service NodePort: `kubectl get svc www-service`
+1. Get the www service NodePort: `kubectl get svc www`
 2. Access: `http://your-ec2-ip:nodeport`
 3. Click link to "rebuild database" or run:
 ```bash
-kubectl port-forward svc/www-service 8080:80 &
+kubectl port-forward --address 0.0.0.0 service/www 8080:80 &
 curl http://localhost:8080/set-up-database.php
 ```
 
@@ -333,13 +343,15 @@ curl http://localhost:8080/set-up-database.php
 ### 12.1 Set Up OWASP ZAP
 ```bash
 # On EC2 instance, ensure port forwarding is active
-kubectl port-forward svc/www-service 8080:80 &
+kubectl port-forward --address 0.0.0.0 service/www 8080:80 &
 
-# Run OWASP ZAP scan
+# Run OWASP ZAP scan (use actual EC2 IP instead of host.docker.internal)
 docker run -v $(pwd):/zap/wrk/:rw zaproxy/zap-stable zap-baseline.py \
-  -t http://host.docker.internal:8080 \
+  -t http://YOUR_EC2_IP:8080 \
   -r scan-report.html \
   -d
+
+# Replace YOUR_EC2_IP with your actual EC2 public IP address
 ```
 
 ### 12.2 Review Security Reports
@@ -371,7 +383,7 @@ kubectl describe pod <pod-name>
 kubectl get events --sort-by=.metadata.creationTimestamp
 
 # Test internal connectivity
-kubectl run test-pod --image=busybox --rm -it --restart=Never -- nslookup database-service
+kubectl run test-pod --image=busybox --rm -it --restart=Never -- nslookup database
 ```
 
 ## Step 14: Production Considerations
@@ -396,21 +408,5 @@ kubectl run test-pod --image=busybox --rm -it --restart=Never -- nslookup databa
 - Test disaster recovery plans
 - Implement automated backups
 
-## Common Issues and Solutions
-
-### Issue 1: Pipeline Fails at AWS Secrets Manager
-**Solution**: Verify IAM permissions and AWS region configuration
-
-### Issue 2: Docker Build Fails
-**Solution**: Check Dockerfile syntax and build context
-
-### Issue 3: Kubernetes Deployment Fails
-**Solution**: Check resource quotas and node capacity
-
-### Issue 4: Services Not Accessible
-**Solution**: Verify service configurations and security groups
-
-### Issue 5: Database Connection Errors
-**Solution**: Ensure secrets are properly configured and pods are ready
 
 This guide provides a complete walkthrough for implementing the Mutillidae DevSecOps pipeline from scratch. Follow each step carefully and verify completion before proceeding to the next step.

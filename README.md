@@ -22,12 +22,14 @@ The project architecture involves:
 ## Requirements
 
 ## Software and Accounts
-1. **Jenkins**: For CI/CD automation.
+1. **Jenkins**: For CI/CD automation (with Java 17+ for SonarCloud compatibility).
 2. **Docker**: To build and scan images.
 3. **AWS CLI**: For accessing AWS Secrets Manager and EC2.
 4. **kubectl**: For managing the Kubernetes deployment on Minikube.
 5. **SonarCloud**: Account and token for static analysis.
 6. **AWS Secrets Manager**: For securely managing sensitive information (e.g., DockerHub credentials, EC2 credentials, SonarCloud credentials, server IP).
+7. **Trivy**: For container vulnerability scanning.
+8. **SonarCloud Scanner**: For static code analysis (requires Java 17+).
 
 ## Prerequisites
 1. Access to an AWS account to set up Secrets Manager and EC2.
@@ -38,7 +40,7 @@ The project architecture involves:
 ## Installation and Setup
 1. **Clone the repository**:
   ```bash
-  git clone https://github.com/ToluGIT/ever.git
+  git clone https://github.com/ToluGIT/ever-Mutillidae.git
   cd mutillidae-docker
 ```
 2. **Setup Jenkins Pipeline**:
@@ -47,10 +49,13 @@ The project architecture involves:
   Ensure the following are installed and configured on  the Jenkins agent:
     1. AWS CLI
     2. Docker
-    3. SonarCloud Scanner 
+    3. SonarCloud Scanner (requires Java 17+)
+    4. Trivy scanner
  and the following necessary plugins installed on Jenkins:
     1. AWS CLI Plugin
     2. GIT plugin
+    3. Pipeline Utility Steps plugin (for readJSON)
+    4. SSH Agent plugin
        
 3. **Configure AWS Secrets Manager**:
   Sensitive information is managed using AWS Secrets Manager. 
@@ -70,10 +75,10 @@ The project architecture involves:
       EC2 instance credentials for SSH access to the Minikube server. 
      ```json
       {
-        "username": "ec2-user",
-        "password": "your-ec2-password"
+        "username": "ubuntu"
       }
     ```
+    Note: SSH key should be stored separately in Jenkins credentials as 'ec2-ssh-key'.
     **SonarCloudCredentials**:
       SonarCloud credentials for static analysis.
       
@@ -184,13 +189,15 @@ Before running the OWASP ZAP scan, ensure that the www service is accessible fro
 
 Once port forwarding is set up, the OWASP ZAP scan can be initiated from the Minikube instance using the following Docker command:
   ```bash
-docker run -v ${PWD}:/zap/wrk/:rw zaproxy/zap-stable zap-baseline.py -t http://host.docker.internal:8082 -r scan-report.html -d
+docker run -v $(pwd):/zap/wrk/:rw zaproxy/zap-stable zap-baseline.py -t http://YOUR_EC2_IP:8080 -r scan-report.html -d
 ```
 This command:
 
-- Mounts the current directory ('${PWD}') on the Minikube instance to '/zap/wrk/' in the OWASP ZAP container, where the scan report will be saved.
-- Runs the OWASP ZAP 'zap-baseline.py' script, targeting the deployed application at 'http://host.docker.internal:8082' (adjust the port if you used a different one).
+- Mounts the current directory on the EC2 instance to '/zap/wrk/' in the OWASP ZAP container, where the scan report will be saved.
+- Runs the OWASP ZAP 'zap-baseline.py' script, targeting the deployed application at your EC2 public IP on port 8080 (via kubectl port-forward).
 - Generates a report named 'scan-report.html', which will be saved in the mounted directory.
+
+**Note**: Replace `YOUR_EC2_IP` with your actual EC2 public IP address. The `host.docker.internal` hostname only works on Docker Desktop and not on Linux environments.
 
 ## Viewing the Report
 The scan report, scan-report.html, will be saved in the directory you specified when mounting (${PWD} in the example). You can open this file in a web browser to review the vulnerabilities and issues detected during the scan.
@@ -206,24 +213,15 @@ This section guides users on setting up the OWASP ZAP DAST scan on the EC2 insta
 
 3. Kubernetes deployment issues: If Minikube deployments fail, ensure that Minikube is running on the EC2 instance.
 
-4. SonarCloud analysis failures: Verify that the SonarCloud credentials in AWS Secrets Manager are valid and that SonarCloud Scanner was installed on jenkins correctly.
+4. SonarCloud analysis failures: Verify that the SonarCloud credentials in AWS Secrets Manager are valid, that SonarCloud Scanner was installed on Jenkins correctly, and that Jenkins is running Java 17 or higher (SonarCloud requirement).
 
 5. Permission errors: Ensure that sshpass and aws CLI are properly installed on the Jenkins server and that Jenkins has sufficient permissions to execute them.
 
 --- 
 
-## Conclusion
-This project deploys the Mutillidae application onto a Minikube instance in an EC2 environment, integrating security checks into a Jenkins pipeline. By using tools like SonarCloud for static analysis and OWASP ZAP for dynamic security testing, it demonstrates secure DevOps practices (DevSecOps).
 
-Next Steps
-To enhance the project:
 
-1. Expand Security: Add more security scanners and set up automated scans.
-2. Improve Monitoring: Integrate logging/monitoring tools like ELK or Prometheus.
-3. Optimize Performance: Conduct load testing and streamline the CI/CD process.
-4. Extend Deployment: Support multiple environments (e.g., AWS EKS, GKE).
 
-## Acknowledgments
-This project follows DevOps security best practices. Thanks to the open-source community for the tools that made this possible.
 
-Thank you for exploring this project! We hope it serves as a helpful example of secure DevOps integration.
+
+
